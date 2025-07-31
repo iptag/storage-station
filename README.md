@@ -77,9 +77,12 @@
 3.  登录成功后，直接将文件拖拽到虚线框内，或点击选择文件。
 4.  上传成功后，页面将显示文件的临时URL。
 
-### API 调用 (Python 示例)
+### API 调用示例 (Python & Node.js)
 
-使用你的本地程序通过 `API_KEY` 调用接口。
+<details>
+<summary><strong>🐍 Python 示例</strong></summary>
+
+> 需要先安装 `requests` 库: `pip install requests`
 
 ```python
 import requests
@@ -99,24 +102,106 @@ headers = {
     "x-api-key": API_KEY
 }
 
-with open(FILE_PATH, 'rb') as f:
-    files = {'file': (os.path.basename(FILE_PATH), f)}
-    
-    print(f"Uploading {FILE_PATH}...")
-    try:
-        response = requests.post(upload_url, headers=headers, files=files, timeout=60)
+# 检查文件是否存在
+if not os.path.exists(FILE_PATH):
+    print(f"❌ 错误: 文件未找到于路径 {FILE_PATH}")
+else:
+    with open(FILE_PATH, 'rb') as f:
+        files = {'file': (os.path.basename(FILE_PATH), f)}
+        
+        print(f"🚀 正在上传文件: {os.path.basename(FILE_PATH)}...")
+        try:
+            response = requests.post(upload_url, headers=headers, files=files, timeout=60)
 
-        if response.status_code == 200:
-            data = response.json()
-            print("✅ 上传成功!")
-            print(f"   URL: {data['url']}")
-        else:
-            print(f"❌ 上传失败，状态码: {response.status_code}")
-            print(f"   错误信息: {response.text}")
+            if response.status_code == 200:
+                data = response.json()
+                print("✅ 上传成功!")
+                print(f"   URL: {data['url']}")
+            else:
+                print(f"❌ 上传失败，状态码: {response.status_code}")
+                print(f"   错误信息: {response.text}")
 
-    except requests.exceptions.RequestException as e:
-        print(f"发生网络错误: {e}")
+        except requests.exceptions.RequestException as e:
+            print(f"发生网络错误: {e}")
+
 ```
+
+</details>
+
+<details>
+<summary><strong>🟩 Node.js 示例</strong></summary>
+
+> 需要先安装 `axios` 和 `form-data` 库: `npm install axios form-data`
+
+```javascript
+// 引入所需的库
+const axios = require('axios');
+const fs = require('fs');
+const path = require('path');
+const FormData = require('form-data');
+
+// --- 配置 ---
+// 你的 Cloudflare Pages 项目的 URL
+const CLOUDFLARE_PAGES_URL = "https://your-project.pages.dev"; 
+// 你在 Cloudflare 中设置的 API Key
+const API_KEY = "your-super-secret-api-key"; 
+// 要上传的本地文件路径
+const FILE_PATH = "./your_audio.mp3"; 
+
+/**
+ * 上传文件到临时中转站的函数
+ * @param {string} filePath - 本地文件的路径
+ */
+async function uploadFile(filePath) {
+    // 检查文件是否存在
+    if (!fs.existsSync(filePath)) {
+        console.error(`❌ 错误：文件未找到于路径 ${filePath}`);
+        return;
+    }
+
+    // 准备请求
+    const uploadUrl = `${CLOUDFLARE_PAGES_URL}/api/upload`;
+    
+    // 创建一个 FormData 实例
+    const formData = new FormData();
+    formData.append('file', fs.createReadStream(filePath));
+
+    // 准备请求头
+    const headers = {
+        'x-api-key': API_KEY,
+        ...formData.getHeaders() // 自动设置 Content-Type 和 Content-Length
+    };
+
+    console.log(`🚀 正在上传文件: ${path.basename(filePath)}...`);
+
+    try {
+        const response = await axios.post(uploadUrl, formData, {
+            headers: headers,
+            timeout: 60000 // 60秒超时
+        });
+
+        if (response.status === 200) {
+            console.log("✅ 上传成功!");
+            console.log(`   URL: ${response.data.url}`);
+        }
+    } catch (error) {
+        console.error("❌ 上传过程中发生错误:");
+        if (error.response) {
+            console.error(`   状态码: ${error.response.status}`);
+            console.error(`   响应数据: ${JSON.stringify(error.response.data)}`);
+        } else if (error.request) {
+            console.error("   未收到服务器响应，请检查网络或URL。");
+        } else {
+            console.error('   请求设置错误:', error.message);
+        }
+    }
+}
+
+// 执行上传函数
+uploadFile(FILE_PATH);
+```
+
+</details>
 
 ## 📁 项目文件结构
 
