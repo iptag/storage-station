@@ -46,16 +46,11 @@ function handleFileUpload(file) {
     const xhr = new XMLHttpRequest();
     xhr.open('POST', '/api/upload', true);
     
-    // 从用户处获取 API 密钥（或者硬编码一个用于前端的密钥）
-    const apiKey = prompt("请输入您的 API 密钥 (用于前端测试):");
-    if (!apiKey) {
-        alert("未提供 API 密钥。");
-        progressBar.style.display = 'none';
-        return;
-    }
-    xhr.setRequestHeader('x-api-key', apiKey);
-
-
+    // ✨【核心修改】✨
+    // 我们不再需要手动设置 x-api-key 请求头了。
+    // 因为用户已经通过密码登录，浏览器会自动携带 site_auth cookie，
+    // 后端会通过验证这个 cookie 来授权上传。
+    
     xhr.upload.onprogress = function(e) {
         if (e.lengthComputable) {
             const percentComplete = (e.loaded / e.total) * 100;
@@ -71,8 +66,13 @@ function handleFileUpload(file) {
             const response = JSON.parse(xhr.responseText);
             resultDiv.innerHTML = `上传成功！<br>URL: <a href="${response.url}" target="_blank">${response.url}</a>`;
         } else {
-            const errorResponse = JSON.parse(xhr.responseText);
-            resultDiv.innerHTML = `上传失败: ${errorResponse.error || '未知错误'}`;
+            // 尝试解析JSON错误，如果不行就直接显示文本
+            try {
+                const errorResponse = JSON.parse(xhr.responseText);
+                resultDiv.innerHTML = `上传失败: ${errorResponse.error || '未知错误'}`;
+            } catch (e) {
+                resultDiv.innerHTML = `上传失败: ${xhr.responseText}`;
+            }
         }
     };
 
