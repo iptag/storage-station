@@ -2,20 +2,33 @@ export async function onRequestPost(context) {
     try {
         const { request, env } = context;
 
-        // --- 安全性检查 ---
-        // 从环境变量中获取预设的 API Key
-        const SECRET_KEY = env.API_KEY;
-        // 从请求头中获取客户端提供的 API Key
-        const providedKey = request.headers.get('x-api-key');
+        // --- 1. 获取所有可能的凭证 ---
+        // 从环境变量中获取预设的密钥
+        const SECRET_API_KEY = env.API_KEY;
+        const SECRET_PAGE_PASSWORD = env.PAGE_PASSWORD;
+        
+        // 从请求中获取客户端提供的凭证
+        const providedApiKey = request.headers.get('x-api-key');
+        const cookieHeader = request.headers.get('Cookie') || '';
 
-        if (!SECRET_KEY || providedKey !== SECRET_KEY) {
-            return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+        // --- 2. 检查两种验证方式 ---
+        // 验证方式一：API Key 是否有效
+        const isApiKeyValid = SECRET_API_KEY && providedApiKey === SECRET_API_KEY;
+
+        // 验证方式二：网页登录的 Cookie 是否有效
+        const authCookie = `site_auth=${SECRET_PAGE_PASSWORD}`;
+        const isCookieValid = SECRET_PAGE_PASSWORD && cookieHeader.includes(authCookie);
+
+        // --- 3. 统一授权检查 ---
+        // 如果两种验证方式都无效，则拒绝访问
+        if (!isCookieValid && !isApiKeyValid) {
+            return new Response(JSON.stringify({ error: 'Unauthorized. Please provide a valid API key or log in.' }), {
                 status: 401,
                 headers: { 'Content-Type': 'application/json' },
             });
         }
-
-        // --- 文件处理 ---
+        
+        // --- 文件处理 (如果授权通过，后续逻辑不变) ---
         const formData = await request.formData();
         const file = formData.get('file');
 
@@ -26,20 +39,15 @@ export async function onRequestPost(context) {
             });
         }
 
-        // 生成一个随机的文件名，避免冲突
         const fileKey = `${crypto.randomUUID()}-${file.name}`;
         
-        // --- 上传到 R2 ---
-        // 'MY_R2_BUCKET' 是你在 Cloudflare Pages 中设置的 R2 绑定的名称
         await env.MY_R2_BUCKET.put(fileKey, file.stream(), {
             httpMetadata: {
                 contentType: file.type,
-                cacheControl: 'public, max-age=31536000', // 可选：设置缓存
+                cacheControl: 'public, max-age=31536000',
             },
         });
 
-        // --- 构建返回的 URL ---
-        // 从环境变量获取 R2 的公开访问域名
         const publicUrlHost = env.R2_PUBLIC_URL;
         if (!publicUrlHost) {
              return new Response(JSON.stringify({ error: 'R2 public URL not configured' }), {
@@ -49,7 +57,6 @@ export async function onRequestPost(context) {
         }
         const url = `${publicUrlHost}/${fileKey}`;
 
-        // --- 返回成功响应 ---
         return new Response(JSON.stringify({ url: url }), {
             status: 200,
             headers: { 'Content-Type': 'application/json' },
